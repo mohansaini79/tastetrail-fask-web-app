@@ -39,6 +39,12 @@ JWT_EXPIRATION_DAYS = 30
 JWT_ALGORITHM = 'HS256'
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
+print("\n" + "="*70)
+print("🍽️  TasteTrail Backend Server")
+print("="*70)
+print(f"✅ Server: http://localhost:{os.getenv('PORT', 5000)}")
+print("="*70 + "\n")
+
 def serialize_doc(doc):
     if doc is None:
         return None
@@ -47,8 +53,6 @@ def serialize_doc(doc):
         doc['user_id'] = str(doc['user_id'])
     if 'created_at' in doc and isinstance(doc['created_at'], datetime):
         doc['created_at'] = doc['created_at'].isoformat()
-    if 'updated_at' in doc and isinstance(doc['updated_at'], datetime):
-        doc['updated_at'] = doc['updated_at'].isoformat()
     return doc
 
 def token_required(f):
@@ -64,13 +68,8 @@ def token_required(f):
             current_user = mongo.db.users.find_one({'_id': ObjectId(data['user_id'])})
             if not current_user:
                 return jsonify({'message': 'User not found'}), 401
-        except jwt.ExpiredSignatureError:
-            return jsonify({'message': 'Token expired'}), 401
-        except jwt.InvalidTokenError:
+        except:
             return jsonify({'message': 'Invalid token'}), 401
-        except Exception as e:
-            print(f"Token error: {str(e)}")
-            return jsonify({'message': 'Token validation failed'}), 401
         return f(current_user, *args, **kwargs)
     return decorated
 
@@ -85,11 +84,7 @@ def index():
 
 @app.route('/api/health', methods=['GET'])
 def health():
-    return jsonify({
-        'status': 'healthy',
-        'database': 'connected' if mongo else 'disconnected',
-        'timestamp': datetime.utcnow().isoformat()
-    }), 200
+    return jsonify({'status': 'healthy', 'database': 'connected' if mongo else 'disconnected'}), 200
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -98,9 +93,6 @@ def register():
             return jsonify({'message': 'Database not connected'}), 500
         
         data = request.get_json()
-        
-        if not data or not data.get('fullName') or not data.get('email') or not data.get('password'):
-            return jsonify({'message': 'Missing required fields'}), 400
         
         if mongo.db.users.find_one({'email': data['email'].lower()}):
             return jsonify({'message': 'Email already registered'}), 409
@@ -146,10 +138,6 @@ def login():
             return jsonify({'message': 'Database not connected'}), 500
         
         data = request.get_json()
-        
-        if not data or not data.get('email') or not data.get('password'):
-            return jsonify({'message': 'Email and password required'}), 400
-        
         user = mongo.db.users.find_one({'email': data['email'].lower()})
         
         if not user or not check_password_hash(user['password'], data['password']):
@@ -201,77 +189,31 @@ def get_dashboard_stats(current_user):
 @token_required
 def get_recipes(current_user):
     try:
-        page = int(request.args.get('page', 1))
-        limit = int(request.args.get('limit', 50))
-        skip = (page - 1) * limit
-        
-        recipes = list(mongo.db.recipes.find().skip(skip).limit(limit).sort('rating', -1))
-        total = mongo.db.recipes.count_documents({})
-        
-        print(f"📚 Found {len(recipes)} recipes (total: {total})")
-        
-        return jsonify({
-            'recipes': [serialize_doc(r) for r in recipes],
-            'total': total,
-            'page': page
-        }), 200
-        
+        recipes = list(mongo.db.recipes.find().limit(50))
+        print(f"📚 Found {len(recipes)} recipes")
+        return jsonify({'recipes': [serialize_doc(r) for r in recipes]}), 200
     except Exception as e:
         print(f"❌ Get recipes error: {str(e)}")
-        return jsonify({'recipes': [], 'total': 0}), 200
-
-@app.route('/api/recipes/<recipe_id>', methods=['GET'])
-@token_required
-def get_recipe(current_user, recipe_id):
-    try:
-        recipe = mongo.db.recipes.find_one({'_id': ObjectId(recipe_id)})
-        if not recipe:
-            return jsonify({'message': 'Recipe not found'}), 404
-        return jsonify({'recipe': serialize_doc(recipe)}), 200
-    except Exception as e:
-        return jsonify({'message': 'Failed to fetch recipe', 'error': str(e)}), 500
+        return jsonify({'recipes': []}), 200
 
 @app.route('/api/recipes/<recipe_id>/save', methods=['POST'])
 @token_required
 def save_recipe(current_user, recipe_id):
     try:
-        recipe = mongo.db.recipes.find_one({'_id': ObjectId(recipe_id)})
-        if not recipe:
-            return jsonify({'message': 'Recipe not found'}), 404
-        
-        result = mongo.db.users.update_one(
+        mongo.db.users.update_one(
             {'_id': current_user['_id']},
             {'$addToSet': {'savedRecipes': ObjectId(recipe_id)}}
         )
-        
-        print(f"💾 Recipe saved: {recipe_id} (modified: {result.modified_count})")
-        return jsonify({'message': 'Recipe saved successfully'}), 200
-        
+        print(f"💾 Recipe saved: {recipe_id}")
+        return jsonify({'message': 'Recipe saved'}), 200
     except Exception as e:
         print(f"❌ Save error: {str(e)}")
-        return jsonify({'message': 'Failed to save recipe', 'error': str(e)}), 500
-
-@app.route('/api/recipes/saved', methods=['GET'])
-@token_required
-def get_saved_recipes(current_user):
-    try:
-        saved_ids = current_user.get('savedRecipes', [])
-        recipes = list(mongo.db.recipes.find({'_id': {'$in': saved_ids}}))
-        
-        return jsonify({
-            'recipes': [serialize_doc(r) for r in recipes],
-            'total': len(recipes)
-        }), 200
-    except Exception as e:
-        return jsonify({'message': 'Failed to fetch saved recipes', 'error': str(e)}), 500
+        return jsonify({'message': 'Failed to save', 'error': str(e)}), 500
 
 @app.route('/api/recipes/<recipe_id>/mark-tried', methods=['POST'])
 @token_required
 def mark_recipe_tried(current_user, recipe_id):
     try:
-        if ObjectId(recipe_id) in current_user.get('triedRecipes', []):
-            return jsonify({'message': 'Recipe already marked as tried'}), 400
-        
         mongo.db.users.update_one(
             {'_id': current_user['_id']},
             {
@@ -279,12 +221,10 @@ def mark_recipe_tried(current_user, recipe_id):
                 '$inc': {'recipesTried': 1}
             }
         )
-        
         print(f"✅ Recipe marked tried: {recipe_id}")
         return jsonify({'message': 'Recipe marked as tried'}), 200
-        
     except Exception as e:
-        return jsonify({'message': 'Failed to mark recipe', 'error': str(e)}), 500
+        return jsonify({'message': 'Failed', 'error': str(e)}), 500
 
 @app.route('/api/seed', methods=['POST'])
 def seed_data():
@@ -292,79 +232,41 @@ def seed_data():
         if not mongo:
             return jsonify({'message': 'Database not connected'}), 500
         
-        existing_count = mongo.db.recipes.count_documents({})
-        if existing_count > 0:
-            return jsonify({
-                'message': f'Database already has {existing_count} recipes',
-                'existing': existing_count
-            }), 400
+        if mongo.db.recipes.count_documents({}) > 0:
+            return jsonify({'message': 'Database already has recipes'}), 400
         
         sample_recipes = [
             {
                 'name': 'Avocado Toast', 'cuisine': 'Breakfast', 'prepTime': 5, 'cookTime': 5,
                 'servings': 2, 'calories': 250, 'difficulty': 'Easy', 'diet': ['vegetarian'],
                 'rating': 4.8, 'reviewCount': 0,
-                'ingredients': ['2 slices bread', '1 avocado', 'salt', 'pepper', 'lemon juice'],
-                'instructions': ['Toast bread until golden', 'Mash avocado with lemon juice', 'Spread on toast', 'Season with salt and pepper'],
+                'ingredients': ['2 slices bread', '1 avocado', 'salt', 'pepper'],
+                'instructions': ['Toast bread', 'Mash avocado', 'Spread and season'],
                 'icon': '🥑', 'created_at': datetime.utcnow()
             },
             {
                 'name': 'Greek Salad', 'cuisine': 'Mediterranean', 'prepTime': 10, 'cookTime': 0,
-                'servings': 4, 'calories': 180, 'difficulty': 'Easy', 'diet': ['vegetarian', 'gluten-free'],
+                'servings': 4, 'calories': 180, 'difficulty': 'Easy', 'diet': ['vegetarian'],
                 'rating': 4.7, 'reviewCount': 0,
-                'ingredients': ['tomatoes', 'cucumber', 'feta cheese', 'olives', 'olive oil', 'oregano'],
-                'instructions': ['Chop vegetables', 'Add feta and olives', 'Drizzle with olive oil', 'Season with oregano'],
+                'ingredients': ['tomatoes', 'cucumber', 'feta', 'olives'],
+                'instructions': ['Chop vegetables', 'Add feta', 'Drizzle olive oil'],
                 'icon': '🥗', 'created_at': datetime.utcnow()
             },
             {
                 'name': 'Chicken Stir Fry', 'cuisine': 'Asian', 'prepTime': 15, 'cookTime': 20,
                 'servings': 4, 'calories': 420, 'difficulty': 'Medium', 'diet': [],
                 'rating': 4.9, 'reviewCount': 0,
-                'ingredients': ['chicken breast', 'mixed vegetables', 'soy sauce', 'garlic', 'ginger', 'sesame oil'],
-                'instructions': ['Cut chicken into strips', 'Heat oil and cook chicken', 'Add vegetables', 'Stir fry with sauce'],
+                'ingredients': ['chicken', 'vegetables', 'soy sauce', 'garlic'],
+                'instructions': ['Cut chicken', 'Stir fry', 'Add sauce'],
                 'icon': '🍜', 'created_at': datetime.utcnow()
-            },
-            {
-                'name': 'Margherita Pizza', 'cuisine': 'Italian', 'prepTime': 20, 'cookTime': 15,
-                'servings': 4, 'calories': 520, 'difficulty': 'Medium', 'diet': ['vegetarian'],
-                'rating': 4.6, 'reviewCount': 0,
-                'ingredients': ['pizza dough', 'tomato sauce', 'mozzarella', 'fresh basil', 'olive oil'],
-                'instructions': ['Roll out dough', 'Spread tomato sauce', 'Add mozzarella', 'Bake at 450°F for 12-15 minutes'],
-                'icon': '🍕', 'created_at': datetime.utcnow()
-            },
-            {
-                'name': 'Smoothie Bowl', 'cuisine': 'Healthy', 'prepTime': 10, 'cookTime': 0,
-                'servings': 2, 'calories': 280, 'difficulty': 'Easy', 'diet': ['vegan', 'gluten-free'],
-                'rating': 4.9, 'reviewCount': 0,
-                'ingredients': ['frozen berries', 'banana', 'almond milk', 'granola', 'honey', 'chia seeds'],
-                'instructions': ['Blend frozen fruit with milk', 'Pour into bowl', 'Top with granola and seeds', 'Drizzle with honey'],
-                'icon': '🍇', 'created_at': datetime.utcnow()
             }
         ]
         
-        result = mongo.db.recipes.insert_many(sample_recipes)
-        print(f"✅ Seeded {len(result.inserted_ids)} recipes")
+        mongo.db.recipes.insert_many(sample_recipes)
+        print(f"✅ Seeded {len(sample_recipes)} recipes")
         
-        return jsonify({
-            'message': f'{len(result.inserted_ids)} recipes seeded successfully',
-            'count': len(result.inserted_ids)
-        }), 201
+        return jsonify({'message': f'{len(sample_recipes)} recipes seeded'}), 201
         
     except Exception as e:
         print(f"❌ Seed error: {str(e)}")
-        print(traceback.format_exc())
         return jsonify({'message': 'Seeding failed', 'error': str(e)}), 500
-
-@app.errorhandler(404)
-def not_found(error):
-    return jsonify({'message': 'Resource not found'}), 404
-
-@app.errorhandler(500)
-def internal_error(error):
-    print(f"500 Error: {str(error)}")
-    return jsonify({'message': 'Internal server error'}), 500
-
-# Production: Gunicorn handles app execution
-# For local development only, uncomment below:
-# if __name__ == '__main__':
-#     app.run(debug=True, host='0.0.0.0', port=5000)

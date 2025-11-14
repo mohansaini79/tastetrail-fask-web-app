@@ -270,15 +270,3 @@ def seed_data():
     except Exception as e:
         print(f"❌ Seed error: {str(e)}")
         return jsonify({'message': 'Seeding failed', 'error': str(e)}), 500
-if __name__ == '__main__':
-    # Get port from environment variable (Render provides PORT=10000)
-    port = int(os.environ.get('PORT', 5000))
-    
-    # Don't print hardcoded port in production
-    if os.environ.get('RENDER'):
-        print(f"🌐 Server starting on port {port}")
-    else:
-        print(f"\n🌐 Visit: http://localhost:{port}\n")
-    
-    # Run app
-    app.run(host='0.0.0.0', port=port, debug=False)

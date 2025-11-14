@@ -556,171 +556,27 @@
     </div>
 
    <script>
-    // Show/Hide Spinner
-function showSpinner() {
-    document.getElementById('globalSpinner').classList.remove('hidden');
-}
-
-function hideSpinner() {
-    document.getElementById('globalSpinner').classList.add('hidden');
-}
-
-// Update Register with Spinner
-document.getElementById('registerForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const submitBtn = this.querySelector('button[type="submit"]');
-    submitBtn.classList.add('btn-loading');
-    submitBtn.disabled = true;
-    showSpinner();
-    
-    const fullName = document.getElementById('regFullName').value;
-    const email = document.getElementById('regEmail').value;
-    const password = document.getElementById('regPassword').value;
-    const dietaryPrefs = Array.from(document.querySelectorAll('input[name="dietary"]:checked')).map(cb => cb.value);
-    
-    try {
-        const response = await fetch(`${API_URL}/auth/register`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                fullName: fullName,
-                email: email,
-                password: password,
-                dietaryPreferences: dietaryPrefs
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            localStorage.setItem('tastetrail_token', data.token);
-            localStorage.setItem('tastetrail_user', JSON.stringify(data.user));
-            showToast(`🎉 Welcome ${fullName}!`, 'success');
-            setTimeout(() => {
-                hideSpinner();
-                loadApp();
-            }, 1000);
-        } else {
-            hideSpinner();
-            showToast(data.message || 'Registration failed!', 'error');
-            submitBtn.classList.remove('btn-loading');
-            submitBtn.disabled = false;
-        }
-    } catch (error) {
-        hideSpinner();
-        console.error('Registration error:', error);
-        showToast('❌ Backend connection error!', 'error');
-        submitBtn.classList.remove('btn-loading');
-        submitBtn.disabled = false;
-    }
-});
-
-// Update Login with Spinner
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const submitBtn = this.querySelector('button[type="submit"]');
-    submitBtn.classList.add('btn-loading');
-    submitBtn.disabled = true;
-    showSpinner();
-    
-    const email = document.getElementById('loginEmail').value;
-    const password = document.getElementById('loginPassword').value;
-    
-    try {
-        const response = await fetch(`${API_URL}/auth/login`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ email, password })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            localStorage.setItem('tastetrail_token', data.token);
-            localStorage.setItem('tastetrail_user', JSON.stringify(data.user));
-            showToast(`✨ Welcome back ${data.user.fullName}!`, 'success');
-            setTimeout(() => {
-                hideSpinner();
-                loadApp();
-            }, 1000);
-        } else {
-            hideSpinner();
-            showToast(data.message || 'Login failed!', 'error');
-            submitBtn.classList.remove('btn-loading');
-            submitBtn.disabled = false;
-        }
-    } catch (error) {
-        hideSpinner();
-        console.error('Login error:', error);
-        showToast('❌ Backend connection error!', 'error');
-        submitBtn.classList.remove('btn-loading');
-        submitBtn.disabled = false;
-    }
-});
-
-// Update loadApp with Spinner
-function loadApp() {
-    showSpinner();
-    
-    const userStr = localStorage.getItem('tastetrail_user');
-    const token = localStorage.getItem('tastetrail_token');
-    
-    if (userStr && token) {
-        try {
-            const user = JSON.parse(userStr);
-            
-            if (user && user.fullName) {
-                document.getElementById('landingPage').classList.add('hidden');
-                closeModals();
-                document.getElementById('dashboardPage').classList.remove('hidden');
-                
-                const firstName = user.fullName.split(' ')[0];
-                document.getElementById('sidebarUserName').textContent = firstName;
-                document.getElementById('userNameTop').textContent = firstName;
-                
-                // Load data
-                Promise.all([
-                    loadRecommendedRecipes(),
-                    loadRecipes(),
-                    loadMealPlanner(),
-                    loadShoppingList(),
-                    loadCollections()
-                ]).finally(() => {
-                    setTimeout(() => hideSpinner(), 500);
-                });
-            } else {
-                hideSpinner();
-                logout();
-            }
-        } catch (error) {
-            hideSpinner();
-            console.error('Error loading app:', error);
-            logout();
-        }
-    } else {
-        hideSpinner();
-    }
-}
-
-// Update saveRecipe with loading state
-async function saveRecipe(id) {
-    const recipe = recipes.find(r => r.id === id);
-    showSpinner();
-    
-    // Simulate API call
-    setTimeout(() => {
-        hideSpinner();
-        showToast(`📌 ${recipe.name} saved!`, 'success');
-    }, 500);
-}
-
     AOS.init({ duration: 800, once: true });
 
-    const API_URL = 'http://localhost:5000/api';  // Backend API URL
+    // ✅ FIXED: Dynamic API URL for both local and production
+    const API_URL = window.location.hostname === 'localhost' 
+        ? 'http://localhost:5000/api'
+        : 'https://tastetrail-fask-web-app-2.onrender.com/api';
+    
+    console.log('🌐 API URL:', API_URL);
+    console.log('🌍 Hostname:', window.location.hostname);
 
-    // Toast Notification Function
+    // Utility Functions
+    function showSpinner() {
+        const spinner = document.getElementById('globalSpinner');
+        if (spinner) spinner.classList.remove('hidden');
+    }
+
+    function hideSpinner() {
+        const spinner = document.getElementById('globalSpinner');
+        if (spinner) spinner.classList.add('hidden');
+    }
+
     function showToast(message, type = 'success') {
         const toast = document.createElement('div');
         toast.className = `toast ${type}`;
@@ -737,16 +593,19 @@ async function saveRecipe(id) {
         
         document.getElementById('toastContainer').appendChild(toast);
         setTimeout(() => toast.classList.add('show'), 100);
-        setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 400); }, 3000);
+        setTimeout(() => { 
+            toast.classList.remove('show'); 
+            setTimeout(() => toast.remove(), 400); 
+        }, 3000);
     }
 
     function toggleMobileMenu() {
-        document.getElementById('mobileMenu').classList.toggle('hidden');
+        document.getElementById('mobileMenu')?.classList.toggle('hidden');
     }
 
     function toggleSidebar() {
-        document.getElementById('sidebar').classList.toggle('mobile-open');
-        document.getElementById('sidebarOverlay').classList.toggle('active');
+        document.getElementById('sidebar')?.classList.toggle('mobile-open');
+        document.getElementById('sidebarOverlay')?.classList.toggle('active');
     }
 
     function showLogin() {
@@ -764,91 +623,111 @@ async function saveRecipe(id) {
         document.getElementById('registerModal').classList.add('hidden');
     }
 
-    // ==================== REGISTER WITH API ====================
+    // Register
     document.getElementById('registerForm').addEventListener('submit', async function(e) {
         e.preventDefault();
+        
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.classList.add('btn-loading');
+        submitBtn.disabled = true;
+        showSpinner();
         
         const fullName = document.getElementById('regFullName').value;
         const email = document.getElementById('regEmail').value;
         const password = document.getElementById('regPassword').value;
         const dietaryPrefs = Array.from(document.querySelectorAll('input[name="dietary"]:checked')).map(cb => cb.value);
         
+        console.log('📝 Registering:', email);
+        
         try {
             const response = await fetch(`${API_URL}/auth/register`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    fullName: fullName,
-                    email: email,
-                    password: password,
+                    fullName, email, password,
                     dietaryPreferences: dietaryPrefs
                 })
             });
             
             const data = await response.json();
+            console.log('Register response:', data);
             
             if (response.ok) {
-                // Save token and user data
                 localStorage.setItem('tastetrail_token', data.token);
                 localStorage.setItem('tastetrail_user', JSON.stringify(data.user));
-                
-                showToast(`🎉 Welcome to TasteTrail, ${fullName}! Your account is ready!`, 'success');
-                setTimeout(() => loadApp(), 1000);
+                showToast(`🎉 Welcome ${fullName}!`, 'success');
+                setTimeout(() => {
+                    hideSpinner();
+                    loadApp();
+                }, 1000);
             } else {
+                hideSpinner();
                 showToast(data.message || 'Registration failed!', 'error');
+                submitBtn.classList.remove('btn-loading');
+                submitBtn.disabled = false;
             }
         } catch (error) {
+            hideSpinner();
             console.error('Registration error:', error);
-            showToast('❌ Connection error! Please check if backend is running.', 'error');
+            showToast('❌ Connection error! Backend might be down.', 'error');
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
         }
     });
 
-    // ==================== LOGIN WITH API ====================
+    // Login
     document.getElementById('loginForm').addEventListener('submit', async function(e) {
         e.preventDefault();
+        
+        const submitBtn = this.querySelector('button[type="submit"]');
+        submitBtn.classList.add('btn-loading');
+        submitBtn.disabled = true;
+        showSpinner();
         
         const email = document.getElementById('loginEmail').value;
         const password = document.getElementById('loginPassword').value;
         
+        console.log('🔑 Logging in:', email);
+        
         try {
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    email: email,
-                    password: password
-                })
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ email, password })
             });
             
             const data = await response.json();
+            console.log('Login response:', data);
             
             if (response.ok) {
-                // Save token and user data
                 localStorage.setItem('tastetrail_token', data.token);
                 localStorage.setItem('tastetrail_user', JSON.stringify(data.user));
-                
-                showToast(`✨ Login successful! Welcome back, ${data.user.fullName}!`, 'success');
-                setTimeout(() => loadApp(), 1000);
+                showToast(`✨ Welcome back!`, 'success');
+                setTimeout(() => {
+                    hideSpinner();
+                    loadApp();
+                }, 1000);
             } else {
+                hideSpinner();
                 showToast(data.message || 'Login failed!', 'error');
+                submitBtn.classList.remove('btn-loading');
+                submitBtn.disabled = false;
             }
         } catch (error) {
+            hideSpinner();
             console.error('Login error:', error);
-            showToast('❌ Connection error! Please check if backend is running.', 'error');
+            showToast('❌ Connection error!', 'error');
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
         }
     });
 
-    // ==================== LOAD APP ====================
+    // Load App
     function loadApp() {
         const userStr = localStorage.getItem('tastetrail_user');
         const token = localStorage.getItem('tastetrail_token');
         
-        console.log('Loading app with user:', userStr);  // Debug log
-        console.log('Token:', token);  // Debug log
+        console.log('Loading app...');
         
         if (userStr && token) {
             try {
@@ -859,43 +738,38 @@ async function saveRecipe(id) {
                     closeModals();
                     document.getElementById('dashboardPage').classList.remove('hidden');
                     
-                    // Set user name in UI
                     const firstName = user.fullName.split(' ')[0];
                     document.getElementById('sidebarUserName').textContent = firstName;
                     document.getElementById('userNameTop').textContent = firstName;
                     
-                    console.log('User loaded successfully:', firstName);  // Debug log
-                    
-                    // Load data
                     loadRecommendedRecipes();
                     loadRecipes();
                     loadMealPlanner();
                     loadShoppingList();
                     loadCollections();
+                    
+                    hideSpinner();
                 } else {
-                    console.error('Invalid user data');
-                    logout();
+                    hideSpinner();
                 }
             } catch (error) {
-                console.error('Error parsing user data:', error);
-                logout();
+                console.error('Error loading app:', error);
+                hideSpinner();
             }
         } else {
-            console.log('No user or token found');
+            hideSpinner();
         }
     }
 
-    // ==================== LOGOUT ====================
     function logout() {
-        showToast('👋 Logged out successfully! See you soon!', 'info');
+        showToast('👋 Logged out!', 'info');
         setTimeout(() => {
-            localStorage.removeItem('tastetrail_token');
-            localStorage.removeItem('tastetrail_user');
+            localStorage.clear();
             location.reload();
         }, 1000);
     }
 
-    // Sample data for demo
+    // Sample Data
     const recipes = [
         { id: 1, name: 'Avocado Toast', time: '5 min', rating: 4.8, cuisine: 'Breakfast', calories: 250, diet: ['vegetarian'], icon: '🥑' },
         { id: 2, name: 'Greek Salad', time: '15 min', rating: 4.7, cuisine: 'Mediterranean', calories: 180, diet: ['vegetarian'], icon: '🥗' },
@@ -905,61 +779,29 @@ async function saveRecipe(id) {
         { id: 6, name: 'Pasta Carbonara', time: '20 min', rating: 4.7, cuisine: 'Italian', calories: 580, diet: [], icon: '🍝' }
     ];
 
-    const collections = [
-        { id: 1, name: 'Favorites', icon: '❤️', count: 12 },
-        { id: 2, name: 'Quick Meals', icon: '⚡', count: 8 },
-        { id: 3, name: 'Healthy Options', icon: '🥗', count: 15 }
-    ];
-
-    const shoppingItems = {
-        produce: ['Tomatoes (4)', 'Onions (2)', 'Lettuce (1)', 'Bell Peppers (3)'],
-        proteins: ['Chicken Breast (2 lbs)', 'Eggs (1 dozen)', 'Tofu (1 block)'],
-        dairy: ['Milk (1 gallon)', 'Cheese (8 oz)', 'Yogurt (32 oz)']
-    };
-
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const meals = ['Breakfast', 'Lunch', 'Dinner'];
 
     function setActiveView(viewName) {
-        document.querySelectorAll('.view-content').forEach(view => view.classList.add('hidden'));
-        const viewMap = {
-            'dashboard': 'dashboardView',
-            'recipes': 'recipesView',
-            'planner': 'plannerView',
-            'shopping': 'shoppingView',
-            'collections': 'collectionsView'
-        };
-        document.getElementById(viewMap[viewName]).classList.remove('hidden');
-        
-        document.querySelectorAll('aside button').forEach(btn => {
-            btn.classList.remove('bg-white/20');
-            btn.classList.add('hover:bg-white/10');
-        });
-        const activeNav = document.getElementById('nav' + viewName.charAt(0).toUpperCase() + viewName.slice(1));
-        if (activeNav) {
-            activeNav.classList.add('bg-white/20');
-            activeNav.classList.remove('hover:bg-white/10');
-        }
+        document.querySelectorAll('.view-content').forEach(v => v.classList.add('hidden'));
+        const viewMap = { dashboard: 'dashboardView', recipes: 'recipesView', planner: 'plannerView', shopping: 'shoppingView', collections: 'collectionsView' };
+        document.getElementById(viewMap[viewName])?.classList.remove('hidden');
     }
 
     function createRecipeCard(recipe) {
         const dietBadges = recipe.diet.map(d => `<span class="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">${d}</span>`).join(' ');
         return `
             <div class="bg-white rounded-2xl overflow-hidden shadow-lg card-hover">
-                <div class="h-40 md:h-48 bg-gradient-to-br from-yellow-100 to-orange-100 flex items-center justify-center text-5xl md:text-7xl">
-                    ${recipe.icon}
-                </div>
-                <div class="p-4 md:p-6">
-                    <h3 class="text-lg md:text-xl font-bold text-gray-900 mb-2">${recipe.name}</h3>
-                    <p class="text-sm text-gray-600 mb-3">${recipe.cuisine} • ${recipe.calories} cal</p>
+                <div class="h-48 bg-gradient-to-br from-yellow-100 to-orange-100 flex items-center justify-center text-7xl">${recipe.icon}</div>
+                <div class="p-6">
+                    <h3 class="text-xl font-bold mb-2">${recipe.name}</h3>
+                    <p class="text-gray-600 mb-3">${recipe.cuisine} • ${recipe.calories} cal</p>
                     <div class="flex flex-wrap gap-2 mb-4">${dietBadges}</div>
-                    <div class="flex items-center justify-between mb-4">
+                    <div class="flex justify-between mb-4">
                         <span class="text-sm text-gray-500"><i class="fas fa-clock mr-1"></i>${recipe.time}</span>
-                        <span class="text-yellow-500 font-semibold"><i class="fas fa-star mr-1"></i>${recipe.rating}</span>
+                        <span class="text-yellow-500"><i class="fas fa-star mr-1"></i>${recipe.rating}</span>
                     </div>
-                    <button onclick="saveRecipe(${recipe.id})" class="w-full gradient-primary text-white py-2 rounded-xl font-semibold hover:shadow-lg transition">
-                        <i class="fas fa-bookmark mr-2"></i>Save Recipe
-                    </button>
+                    <button onclick="saveRecipe(${recipe.id})" class="w-full gradient-primary text-white py-2 rounded-xl font-semibold">Save</button>
                 </div>
             </div>
         `;
@@ -975,99 +817,51 @@ async function saveRecipe(id) {
 
     function saveRecipe(id) {
         const recipe = recipes.find(r => r.id === id);
-        showToast(`📌 ${recipe.name} saved to your collection!`, 'success');
+        showToast(`📌 ${recipe.name} saved!`, 'success');
     }
 
     function searchRecipes() {
         const query = document.getElementById('searchRecipes').value.toLowerCase();
-        const filtered = recipes.filter(r => r.name.toLowerCase().includes(query) || r.cuisine.toLowerCase().includes(query));
-        document.getElementById('recipesList').innerHTML = filtered.length > 0 
-            ? filtered.map(r => createRecipeCard(r)).join('')
-            : '<p class="col-span-3 text-center text-gray-500 py-12">No recipes found</p>';
+        const filtered = recipes.filter(r => r.name.toLowerCase().includes(query));
+        document.getElementById('recipesList').innerHTML = filtered.map(r => createRecipeCard(r)).join('');
     }
 
     function loadMealPlanner() {
         const container = document.getElementById('mealPlannerGrid');
+        if (!container) return;
         container.innerHTML = days.map(day => `
             <div>
-                <h3 class="font-bold text-center text-gray-900 mb-4">${day}</h3>
+                <h3 class="font-bold text-center mb-4">${day}</h3>
                 <div class="space-y-3">
-                    ${meals.map(meal => `
-                        <div class="meal-slot rounded-xl p-4 text-center bg-gray-50" onclick="addMeal(this, '${day}', '${meal}')">
-                            <p class="font-semibold text-sm text-gray-700 mb-2">${meal}</p>
-                            <p class="text-xs text-gray-400">Click to add</p>
-                        </div>
-                    `).join('')}
+                    ${meals.map(meal => `<div class="meal-slot rounded-xl p-4 text-center bg-gray-50" onclick="addMeal(this)"><p class="font-semibold text-sm">${meal}</p></div>`).join('')}
                 </div>
             </div>
         `).join('');
     }
 
-    function addMeal(element, day, meal) {
-        const randomRecipe = recipes[Math.floor(Math.random() * recipes.length)];
-        element.classList.add('filled');
-        element.innerHTML = `
-            <p class="font-semibold text-sm text-gray-700 mb-1">${meal}</p>
-            <p class="text-lg mb-1">${randomRecipe.icon}</p>
-            <p class="text-xs font-semibold text-gray-900">${randomRecipe.name}</p>
-            <p class="text-xs text-gray-500">${randomRecipe.time}</p>
-        `;
-        showToast(`✅ ${randomRecipe.name} added to ${day} ${meal}!`, 'success');
+    function addMeal(el) {
+        const recipe = recipes[Math.floor(Math.random() * recipes.length)];
+        el.classList.add('filled');
+        el.innerHTML = `<p class="text-lg">${recipe.icon}</p><p class="text-xs font-semibold">${recipe.name}</p>`;
+        showToast(`Added ${recipe.name}`, 'success');
     }
 
     function loadShoppingList() {
         const container = document.getElementById('shoppingListGrid');
-        const categories = {
-            'Produce': { icon: '🥬', items: shoppingItems.produce },
-            'Proteins': { icon: '🍗', items: shoppingItems.proteins },
-            'Dairy': { icon: '🥛', items: shoppingItems.dairy }
-        };
-        
-        container.innerHTML = Object.entries(categories).map(([name, data]) => `
-            <div class="bg-white rounded-2xl shadow-lg p-6">
-                <h3 class="text-2xl font-bold text-gray-900 mb-4 flex items-center">
-                    <span class="text-3xl mr-3">${data.icon}</span>${name}
-                </h3>
-                <div class="space-y-3">
-                    ${data.items.map(item => `
-                        <label class="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                            <input type="checkbox" class="w-5 h-5 rounded">
-                            <span class="text-gray-700">${item}</span>
-                        </label>
-                    `).join('')}
-                </div>
-            </div>
-        `).join('');
+        if (container) container.innerHTML = '<div class="bg-white p-6 rounded-2xl"><h3 class="font-bold mb-4">Shopping List</h3></div>';
     }
 
     function loadCollections() {
-        document.getElementById('collectionsGrid').innerHTML = collections.map(col => `
-            <div class="bg-white rounded-2xl shadow-lg p-6 md:p-8 card-hover cursor-pointer">
-                <div class="flex items-center justify-between mb-4">
-                    <span class="text-4xl md:text-5xl">${col.icon}</span>
-                    <span class="text-sm text-gray-500 font-semibold">${col.count} recipes</span>
-                </div>
-                <h3 class="text-xl md:text-2xl font-bold text-gray-900 mb-2">${col.name}</h3>
-            </div>
-        `).join('');
+        const container = document.getElementById('collectionsGrid');
+        if (container) container.innerHTML = '<div class="bg-white p-8 rounded-2xl"><span class="text-5xl">❤️</span><h3 class="text-2xl font-bold mt-4">Favorites</h3></div>';
     }
 
-    // ==================== CHECK ON PAGE LOAD ====================
     window.onload = () => {
-        console.log('Page loaded, checking for user...');
-        const user = localStorage.getItem('tastetrail_user');
-        const token = localStorage.getItem('tastetrail_token');
-        
-        console.log('User in localStorage:', user);
-        console.log('Token exists:', !!token);
-        
-        if (user && token) {
+        console.log('Page loaded');
+        if (localStorage.getItem('tastetrail_user') && localStorage.getItem('tastetrail_token')) {
             loadApp();
-        } else {
-            console.log('No user found, showing landing page');
         }
     };
 </script>
-
 </body>
 </html>
